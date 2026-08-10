@@ -200,7 +200,7 @@ function fullStop() {
   ship.vx = 0;
   ship.vy = 0;
   for (let i = 0; i < 18; i++) puff(ship.x, ship.y, rand(0, 360), 2.5, '#9fc0ff');
-  addScore(CFG.STOP_POINTS, 'Retro-burn. Dead stop, <span class="bad">&minus;1</span>.');
+  addScore(CFG.STOP_POINTS, 'Retro-burn completed, stopped, <span class="bad">&minus;1</span>.');
 }
 
 // ---------------------------------------------------------------------------
@@ -236,7 +236,7 @@ function step() {
     const hitX = ship.x, hitY = ship.y;   // mark the exit point, not the respawn
     ship.x = 0; ship.y = 0; ship.vx = 0; ship.vy = 0;
     shake = 10;
-    addScore(CFG.EDGE_POINTS, 'Lost to the void. Towed back to centre, <span class="bad">&minus;2</span>.',
+    addScore(CFG.EDGE_POINTS, 'Lost to the void. Towed back to the center of space, <span class="bad">&minus;2</span>.',
              hitX, hitY);
   }
 
@@ -245,7 +245,7 @@ function step() {
     for (let i = 0; i < 26; i++) puff(coin.x, coin.y, rand(0, 360), rand(1, 4.5), '#ffd257');
     Object.assign(coin, spawn());
     Object.assign(hole, spawn());
-    addScore(CFG.COIN_POINTS, 'Coin collected, <span class="good">+3</span>. The black hole moved.');
+    addScore(CFG.COIN_POINTS, 'Coin collected, <span class="good">+3</span>.');
   }
 
   // black hole
@@ -253,7 +253,7 @@ function step() {
     for (let i = 0; i < 30; i++) puff(hole.x, hole.y, rand(0, 360), rand(1, 5), '#c07bff');
     Object.assign(hole, spawn());
     shake = 16;
-    addScore(CFG.HOLE_POINTS, 'Spaghettified. <span class="bad">&minus;5</span>.');
+    addScore(CFG.HOLE_POINTS, 'Swallowed. <span class="bad">&minus;5</span>.');
   }
 
   for (let i = particles.length - 1; i >= 0; i--) {

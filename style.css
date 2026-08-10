@@ -33,11 +33,22 @@ body {
     var(--bg);
 }
 
+/* The arena is square, so its width is what limits the height of the page. Budget
+   out the HUD, the log line, the gaps and the body padding, otherwise the bottom
+   of the square gets pushed off screen. --chrome is measured, not guessed. */
 #shell {
-  width: min(96vw, min(860px, 92vh));
+  --chrome: 138px;
+  width: min(96vw, 860px, calc(100vh - var(--chrome)));
+  width: min(96vw, 860px, calc(100dvh - var(--chrome)));
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* short, wide windows: the log line is the first thing worth giving up */
+@media (max-height: 560px) {
+  #shell { --chrome: 104px; }
+  #log { display: none; }
 }
 
 /* ---------- HUD ---------- */
