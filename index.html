@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Rocket Runner — Coins &amp; Black Holes</title>
+<meta name="description" content="Fly a rocket with momentum-based physics, collect coins, avoid black holes." />
+<meta name="theme-color" content="#05060f" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%9A%80%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="shell">
+  <header id="hud">
+    <div class="stat">
+      <span class="label">Score</span>
+      <span class="value" id="score">0</span>
+      <span class="sub">of 20 to win</span>
+    </div>
+    <div class="bar-wrap" aria-hidden="true">
+      <div class="bar"><div class="bar-fill" id="bar"></div></div>
+    </div>
+    <div class="stat right">
+      <span class="label">Time</span>
+      <span class="value" id="time">0.0s</span>
+      <span class="sub" id="best">best —</span>
+    </div>
+  </header>
+
+  <div id="stage">
+    <canvas id="game" width="800" height="800" aria-label="Game area"></canvas>
+
+    <div id="flash" aria-hidden="true"></div>
+
+    <div class="overlay" id="overlay">
+      <div class="panel">
+        <h1>Rocket Runner</h1>
+        <p class="tag">Momentum is real. There is no brake — only thrust.</p>
+        <ul class="rules">
+          <li><b class="k">W</b> / <b class="k">&uarr;</b> thrust</li>
+          <li><b class="k">A</b> <b class="k">D</b> / <b class="k">&larr;</b> <b class="k">&rarr;</b> rotate</li>
+          <li><b class="k">S</b> / <b class="k">&darr;</b> full stop &mdash; costs <span class="bad">1 point</span></li>
+        </ul>
+        <ul class="rules scores">
+          <li><span class="good">+3</span> collect a coin</li>
+          <li><span class="bad">&minus;5</span> fall into a black hole</li>
+          <li><span class="bad">&minus;2</span> drift off the edge</li>
+        </ul>
+        <button id="start" class="btn">Launch</button>
+        <p class="hint"><b class="k">P</b> pause &middot; <b class="k">R</b> restart</p>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="pauseOverlay">
+      <div class="panel small">
+        <h2>Paused</h2>
+        <button id="resume" class="btn">Resume</button>
+        <p class="hint">or press <b class="k">P</b></p>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="winOverlay">
+      <div class="panel">
+        <h2 id="winTitle">Game Over</h2>
+        <p class="big" id="winStats"></p>
+        <p class="tag" id="winNote"></p>
+        <button id="again" class="btn">Play again</button>
+      </div>
+    </div>
+  </div>
+
+  <footer id="log" aria-live="polite"></footer>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
