@@ -9,11 +9,11 @@
 // ---------------------------------------------------------------------------
 const CFG = {
   BOUND: 400,          // original: off-screen past +/-400
-  THRUST: 0.1,         // original: velocity added per thrust frame
+  THRUST: 0.075,         // original: velocity added per thrust frame
   TURN_DEG: 4,         // original turned 10 deg per keypress; 4 deg/frame while
                        // held is the same feel at a steady 60 Hz
   COIN_DRIFT: 1,       // original: coinx / coiny
-  HOLE_DRIFT: 4,       // original: blackholex / blackholey
+  HOLE_DRIFT: 2,       // original: blackholex / blackholey
   COIN_HIT: 40,        // original: abs(dx) < 40 and abs(dy) < 40
   HOLE_HIT: 50,        // original: abs(dx) < 50 and abs(dy) < 50
   WIN_SCORE: 20,
@@ -80,7 +80,7 @@ const toScreen = (x, y) => [SIZE / 2 + x, SIZE / 2 - y];
 // State
 // ---------------------------------------------------------------------------
 let state = 'intro';   // intro | playing | paused | over
-let ship, coin, hole, score, elapsed, particles, shake, acc, last;
+let ship, coin, hole, score, elapsed, particles, pops, shake, acc, last;
 
 function spawn() {
   return { x: rand(-CFG.BOUND, CFG.BOUND), y: rand(-CFG.BOUND, CFG.BOUND) };
@@ -93,6 +93,7 @@ function reset() {
   score = 0;
   elapsed = 0;
   particles = [];
+  pops = [];
   shake = 0;
   acc = 0;
   last = 0;
@@ -162,12 +163,27 @@ document.getElementById('resume').onclick = togglePause;
 // ---------------------------------------------------------------------------
 // Scoring helpers
 // ---------------------------------------------------------------------------
-function addScore(n, message) {
+function addScore(n, message, x = ship.x, y = ship.y) {
   score += n;
   paintHud(n);
+  pop(n, x, y);
   el.log.innerHTML = message;
   el.flash.className = n > 0 ? 'good' : 'bad';
   setTimeout(() => { el.flash.className = ''; }, 260);
+}
+
+// A floating "+3" / "-2" that rises from where the points changed. Kept a little
+// way inside the arena so a hit on the very edge is still readable.
+function pop(n, x, y) {
+  const m = CFG.BOUND - 46;
+  pops.push({
+    text: (n > 0 ? '+' : '−') + Math.abs(n),
+    color: n > 0 ? '#ffd257' : '#ff6b7f',
+    x: Math.max(-m, Math.min(m, x)),
+    y: Math.max(-m, Math.min(m, y)) + 38,   // above the rocket
+    life: 0,
+    span: 78
+  });
 }
 
 function paintHud(delta) {
@@ -217,9 +233,11 @@ function step() {
 
   // off the edge (original: -2 and recentre)
   if (Math.abs(ship.x) > CFG.BOUND || Math.abs(ship.y) > CFG.BOUND) {
+    const hitX = ship.x, hitY = ship.y;   // mark the exit point, not the respawn
     ship.x = 0; ship.y = 0; ship.vx = 0; ship.vy = 0;
     shake = 10;
-    addScore(CFG.EDGE_POINTS, 'Lost to the void. Towed back to centre, <span class="bad">&minus;2</span>.');
+    addScore(CFG.EDGE_POINTS, 'Lost to the void. Towed back to centre, <span class="bad">&minus;2</span>.',
+             hitX, hitY);
   }
 
   // coin pickup — also relocates the black hole, as in the original
@@ -242,6 +260,11 @@ function step() {
     const p = particles[i];
     p.x += p.vx; p.y += p.vy; p.life -= 1;
     if (p.life <= 0) particles.splice(i, 1);
+  }
+  for (let i = pops.length - 1; i >= 0; i--) {
+    const p = pops[i];
+    p.y += 0.65;
+    if (++p.life >= p.span) pops.splice(i, 1);
   }
   if (shake > 0) shake *= 0.88;
 
@@ -344,9 +367,35 @@ function draw(t) {
 
   drawHole(t);
   drawCoin(t);
+  drawVelocity();
   drawShip();
+  drawPops();
 
   ctx.restore();
+}
+
+function drawPops() {
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  for (const p of pops) {
+    const k = p.life / p.span;
+    const [px, py] = toScreen(p.x, p.y);
+    // quick scale-up on arrival, then fade over the last third
+    const grow = k < 0.12 ? 0.6 + (k / 0.12) * 0.5 : 1.1 - Math.min(0.1, (k - 0.12) * 0.3);
+    ctx.globalAlpha = k > 0.65 ? 1 - (k - 0.65) / 0.35 : 1;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.scale(grow, grow);
+    ctx.font = '700 27px ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif';
+    ctx.strokeStyle = 'rgba(4,6,16,0.85)';
+    ctx.lineWidth = 5;
+    ctx.strokeText(p.text, 0, 0);
+    ctx.fillStyle = p.color;
+    ctx.fillText(p.text, 0, 0);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawHole(t) {
@@ -428,6 +477,47 @@ function drawCoin(t) {
   ctx.beginPath();
   ctx.arc(0, 0, 11, 0, Math.PI * 2);
   ctx.stroke();
+  ctx.restore();
+}
+
+// Velocity vector: points where the rocket is actually drifting, not where it is
+// aimed, and its length scales with speed. The two often disagree — that is the
+// whole game.
+function drawVelocity() {
+  const speed = Math.hypot(ship.vx, ship.vy);
+  if (speed < 0.3) return;
+
+  // Accelerating straight from the centre, the rocket reaches roughly
+  // sqrt(2 * THRUST * BOUND) before it runs out of arena, so scale against that.
+  const top = Math.sqrt(2 * CFG.THRUST * CFG.BOUND);
+  const len = Math.min(118, 12 + (speed / top) * 100);
+  const heat = Math.min(1, speed / top);                 // calm blue -> hot red
+  const color = `hsl(${200 - heat * 190}, 100%, ${64 + heat * 6}%)`;
+  const [x, y] = toScreen(ship.x, ship.y);
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.atan2(-ship.vy, ship.vx));   // screen y is flipped
+  ctx.globalAlpha = 0.9;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 3;
+
+  const head = 9 + heat * 4;
+  ctx.beginPath();
+  ctx.moveTo(24, 0);                            // start clear of the hull
+  ctx.lineTo(24 + len - head, 0);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(24 + len, 0);
+  ctx.lineTo(24 + len - head, -head * 0.62);
+  ctx.lineTo(24 + len - head, head * 0.62);
+  ctx.closePath();
+  ctx.fill();
   ctx.restore();
 }
 
