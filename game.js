@@ -1,4 +1,4 @@
-/* Rocket Runner — a modern port of the Trinket.io turtle game.
+/* Rocket in Space — a modern port of the Trinket.io turtle game.
    World coordinates match the original: centred origin, x right, y up, edges at +/-400. */
 
 'use strict';
