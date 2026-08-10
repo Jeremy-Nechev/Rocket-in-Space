@@ -51,6 +51,7 @@ const el = {
   intro: document.getElementById('overlay'),
   pause: document.getElementById('pauseOverlay'),
   win: document.getElementById('winOverlay'),
+  mute: document.getElementById('mute'),
   winTitle: document.getElementById('winTitle'),
   winStats: document.getElementById('winStats'),
   winNote: document.getElementById('winNote')
@@ -113,6 +114,8 @@ const CODES = {
 };
 
 addEventListener('keydown', e => {
+  Sound.unlock();   // audio can only start from a real interaction
+  if (e.code === 'KeyM') { toggleMute(); return; }
   if (e.code === 'KeyP') { togglePause(); return; }
   if (e.code === 'KeyR') { startGame(); return; }
   if (e.code === 'Space' || e.code === 'Enter') {
@@ -131,7 +134,12 @@ addEventListener('keyup', e => {
   if (act) keys.delete(act);
 });
 
-addEventListener('blur', () => keys.clear());
+// leaving the tab: drop the keys and kill the engine loop, or it keeps roaring
+// in the background while requestAnimationFrame is parked
+addEventListener('blur', () => { keys.clear(); Sound.thrust(false); });
+addEventListener('visibilitychange', () => {
+  if (document.hidden) { keys.clear(); Sound.thrust(false); }
+});
 
 // Touch: left third turns left, right third turns right, middle thrusts.
 const touches = new Map();
@@ -141,6 +149,7 @@ function zoneOf(clientX) {
   return t < 0.33 ? 'left' : t > 0.67 ? 'right' : 'up';
 }
 cv.addEventListener('pointerdown', e => {
+  Sound.unlock();
   if (state === 'intro' || state === 'over') return;
   cv.setPointerCapture(e.pointerId);
   const z = zoneOf(e.clientX);
@@ -159,6 +168,18 @@ cv.addEventListener('pointercancel', endTouch);
 document.getElementById('start').onclick = startGame;
 document.getElementById('again').onclick = startGame;
 document.getElementById('resume').onclick = togglePause;
+el.mute.onclick = toggleMute;
+
+function toggleMute() {
+  Sound.unlock();
+  paintMute(Sound.toggleMute());
+}
+
+function paintMute(m) {
+  el.mute.textContent = m ? '\u{1F507}' : '\u{1F50A}';
+  el.mute.classList.toggle('off', m);
+  el.mute.setAttribute('aria-label', m ? 'Unmute sound' : 'Mute sound');
+}
 
 // ---------------------------------------------------------------------------
 // Scoring helpers
@@ -213,6 +234,7 @@ function step() {
 
   // thrust (original: updatevelocity)
   ship.thrusting = keys.has('up');
+  Sound.thrust(ship.thrusting);
   if (ship.thrusting) {
     const a = ship.heading * Math.PI / 180;
     ship.vx += Math.cos(a) * CFG.THRUST;
@@ -236,6 +258,7 @@ function step() {
     const hitX = ship.x, hitY = ship.y;   // mark the exit point, not the respawn
     ship.x = 0; ship.y = 0; ship.vx = 0; ship.vy = 0;
     shake = 10;
+    Sound.bong();
     addScore(CFG.EDGE_POINTS, 'Lost to the void. Towed back to the center of space, <span class="bad">&minus;2</span>.',
              hitX, hitY);
   }
@@ -245,6 +268,7 @@ function step() {
     for (let i = 0; i < 26; i++) puff(coin.x, coin.y, rand(0, 360), rand(1, 4.5), '#ffd257');
     Object.assign(coin, spawn());
     Object.assign(hole, spawn());
+    Sound.coin();
     addScore(CFG.COIN_POINTS, 'Coin collected, <span class="good">+3</span>.');
   }
 
@@ -253,6 +277,7 @@ function step() {
     for (let i = 0; i < 30; i++) puff(hole.x, hole.y, rand(0, 360), rand(1, 5), '#c07bff');
     Object.assign(hole, spawn());
     shake = 16;
+    Sound.woosh();
     addScore(CFG.HOLE_POINTS, 'Swallowed. <span class="bad">&minus;5</span>.');
   }
 
@@ -600,12 +625,14 @@ function frame(now) {
     el.time.textContent = (elapsed / 1000).toFixed(1) + 's';
   } else {
     last = 0;
+    Sound.thrust(false);   // covers pause, win and the intro screen
   }
   draw(now);
   requestAnimationFrame(frame);
 }
 
 function startGame() {
+  Sound.unlock();
   reset();
   state = 'playing';
   el.intro.classList.add('hidden');
@@ -644,6 +671,7 @@ function showBest() {
   el.best.textContent = best ? `best ${best}s` : 'best —';
 }
 
+paintMute(Sound.muted);
 showBest();
 reset();
 state = 'intro';
