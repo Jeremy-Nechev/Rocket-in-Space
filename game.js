@@ -139,6 +139,7 @@ addEventListener('keyup', e => {
 addEventListener('blur', () => { keys.clear(); Sound.thrust(false); });
 addEventListener('visibilitychange', () => {
   if (document.hidden) { keys.clear(); Sound.thrust(false); }
+  Sound.music(!document.hidden);
 });
 
 // Touch: left third turns left, right third turns right, middle thrusts.

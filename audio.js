@@ -12,9 +12,13 @@ const Sound = (() => {
   let noise = null;          // shared white-noise buffer
   let thrustGain = null;     // envelope for the looping rocket rumble
   let thrusting = false;
+  let musicBus = null;       // master fader for the ambient bed
+  let voiceOut = null;       // everything musical goes in here, dry + reverb
+  let twinkleTimer = null;
   let muted = localStorage.getItem('rocket.muted') === '1';
 
   const VOL = 0.85;
+  const MUSIC_VOL = 0.5;
   const now = () => ctx.currentTime;
 
   function build() {
@@ -40,6 +44,7 @@ const Sound = (() => {
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
 
     buildThrust();
+    buildMusic();
   }
 
   // Rocket: filtered noise for the exhaust hiss plus a low sawtooth for the
@@ -77,6 +82,131 @@ const Sound = (() => {
     soften.connect(rumbleGain);
     rumbleGain.connect(thrustGain);
     rumble.start();
+  }
+
+  // -------------------------------------------------------------------------
+  // Ambient music. Generated rather than looped: a low drone, a slow-breathing
+  // chord, and occasional bell notes from one scale. Nothing repeats exactly,
+  // because every layer drifts on its own timer.
+  // -------------------------------------------------------------------------
+
+  // A minor pentatonic — no semitone clashes, so notes can overlap freely in
+  // the long reverb tail without ever sounding wrong together.
+  const SCALE = [220, 261.63, 293.66, 329.63, 392, 440, 523.25, 587.33, 659.25];
+  const CHORD = [110, 164.81, 261.63, 329.63];   // Am spread wide
+
+  // convolution reverb from an exponentially decaying noise burst — this is what
+  // makes it read as "space" rather than "four oscillators"
+  function reverb(seconds, decay) {
+    const rate = ctx.sampleRate;
+    const len = Math.floor(rate * seconds);
+    const buf = ctx.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+      }
+    }
+    const conv = ctx.createConvolver();
+    conv.buffer = buf;
+    return conv;
+  }
+
+  function buildMusic() {
+    musicBus = ctx.createGain();
+    musicBus.gain.value = 0.0001;
+    musicBus.connect(master);
+
+    voiceOut = ctx.createGain();
+
+    const dry = ctx.createGain();
+    dry.gain.value = 0.5;
+    voiceOut.connect(dry);
+    dry.connect(musicBus);
+
+    const wet = ctx.createGain();
+    wet.gain.value = 0.85;                       // heavy on the reverb
+    const conv = reverb(4.5, 2.2);
+    voiceOut.connect(conv);
+    conv.connect(wet);
+    wet.connect(musicBus);
+
+    droneVoice(55, 0.05);                        // A1
+    droneVoice(82.41, 0.035);                    // E2, a fifth up
+    for (let i = 0; i < CHORD.length; i++) padVoice(CHORD[i], 0.05, 0.017 + i * 0.011);
+  }
+
+  // low sustained rumble with a slowly wandering filter
+  function droneVoice(freq, vol) {
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.value = freq;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 150;
+    const g = ctx.createGain();
+    g.gain.value = vol;
+    o.connect(lp);
+    lp.connect(g);
+    g.connect(voiceOut);
+    o.start();
+
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.02 + Math.random() * 0.03;   // one sweep per ~40s
+    const amt = ctx.createGain();
+    amt.gain.value = 70;
+    lfo.connect(amt);
+    amt.connect(lp.frequency);
+    lfo.start();
+  }
+
+  // one chord note that fades in and out on its own very slow cycle, so the
+  // chord is never fully present and never fully gone
+  function padVoice(freq, vol, lfoHz) {
+    const o = ctx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.value = freq;
+    o.detune.value = (Math.random() * 2 - 1) * 6;        // gentle beating
+    const g = ctx.createGain();
+    g.gain.value = vol / 2;
+
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = lfoHz;                         // 60s+ per cycle
+    const amt = ctx.createGain();
+    amt.gain.value = vol / 2;                            // swings the gain 0..vol
+    lfo.connect(amt);
+    amt.connect(g.gain);
+    lfo.start();
+
+    o.connect(g);
+    g.connect(voiceOut);
+    o.start();
+  }
+
+  // a single bell note, swelling in and ringing out into the reverb
+  function twinkle() {
+    const t = now() + 0.05;
+    const f = SCALE[Math.floor(Math.random() * SCALE.length)];
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.value = f;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.1, t + 1.1);        // slow swell, no attack click
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 5);
+    o.connect(g);
+    g.connect(voiceOut);
+    o.start(t);
+    o.stop(t + 5.1);
+  }
+
+  function scheduleTwinkle() {
+    clearTimeout(twinkleTimer);
+    twinkleTimer = setTimeout(() => {
+      twinkle();
+      scheduleTwinkle();
+    }, 3500 + Math.random() * 6000);
   }
 
   function tone(t, freq, dur, vol, type = 'triangle', endFreq = null) {
@@ -120,8 +250,22 @@ const Sound = (() => {
     get muted() { return muted; },
 
     unlock() {
+      const first = !ctx;
       build();
-      if (ctx && ctx.state === 'suspended') ctx.resume();
+      if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      if (first) this.music(true);   // ambience starts with the first interaction
+    },
+
+    // fades the music bed in or out; also parks the bell scheduler
+    music(on) {
+      if (!ctx) return;
+      const t = now();
+      musicBus.gain.cancelScheduledValues(t);
+      musicBus.gain.setValueAtTime(musicBus.gain.value, t);
+      musicBus.gain.linearRampToValueAtTime(on ? MUSIC_VOL : 0.0001, t + (on ? 3 : 0.5));
+      if (on) scheduleTwinkle();
+      else clearTimeout(twinkleTimer);
     },
 
     // called every frame; only touches the envelope when the state changes
