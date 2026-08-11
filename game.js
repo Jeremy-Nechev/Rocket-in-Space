@@ -660,7 +660,7 @@ function finish() {
   const isBest = !best || secs < best;
   if (isBest) localStorage.setItem('rocket.best', secs.toFixed(1));
 
-  el.winTitle.textContent = 'Score 20 — you win';
+  el.winTitle.textContent = 'Score is above 20. You win!';
   el.winStats.innerHTML = `Final score <b>${score}</b> in <b>${secs.toFixed(1)}s</b>`;
   el.winNote.textContent = isBest ? 'New personal best.' : `Your best is ${best.toFixed(1)}s.`;
   el.win.classList.remove('hidden');
