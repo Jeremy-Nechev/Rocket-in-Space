@@ -18,7 +18,7 @@ const Sound = (() => {
   let muted = localStorage.getItem('rocket.muted') === '1';
 
   const VOL = 0.85;
-  const MUSIC_VOL = 0.5;
+  const MUSIC_VOL = 0.7;
   const now = () => ctx.currentTime;
 
   function build() {
